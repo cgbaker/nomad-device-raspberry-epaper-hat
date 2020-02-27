@@ -11,28 +11,14 @@ import (
 	"github.com/hashicorp/nomad/plugins/base"
 	"github.com/hashicorp/nomad/plugins/device"
 	"github.com/hashicorp/nomad/plugins/shared/hclspec"
-	"github.com/kr/pretty"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
 
 const (
-	// pluginName is the deviceName of the plugin
-	// this is used for logging and (along with the version) for uniquely identifying
-	// plugin binaries fingerprinted by the client
-	pluginName = "skeleton-device"
+	pluginName = "papirus"
 
-	// plugin version allows the client to identify and use newer versions of
-	// an installed plugin
 	pluginVersion = "v0.1.0"
-
-	// vendor is the label for the vendor providing the devices.
-	// along with "type" and "model", this can be used when requesting devices:
-	//   https://www.nomadproject.io/docs/job-specification/device.html#name
-	vendor = "hashicorp"
-
-	// deviceType is the "type" of device being returned
-	deviceType = "skeleton"
 )
 
 var (
@@ -44,52 +30,16 @@ var (
 		Name:              pluginName,
 	}
 
-	// configSpec is the specification of the schema for this plugin's config.
-	// this is used to validate the HCL for the plugin provided
-	// as part of the client config:
-	//   https://www.nomadproject.io/docs/configuration/plugin.html
-	// options are here:
-	//   https://github.com/hashicorp/nomad/blob/v0.10.0/plugins/shared/hclspec/hcl_spec.proto
-	configSpec = hclspec.NewObject(map[string]*hclspec.Spec{
-		"some_optional_string_with_default": hclspec.NewDefault(
-			hclspec.NewAttr("some_optional_string_with_default", "string", false),
-			hclspec.NewLiteral("\"note the escaped quotes here\""),
-		),
-		"some_required_boolean": hclspec.NewAttr("some_required_boolean", "bool", true),
-		"some_optional_list":    hclspec.NewAttr("some_optional_list", "list(number)", false),
-		"fingerprint_period": hclspec.NewDefault(
-			hclspec.NewAttr("fingerprint_period", "string", false),
-			hclspec.NewLiteral("\"1m\""),
-		),
-	})
+	configSpec = hclspec.NewObject(map[string]*hclspec.Spec{})
 )
 
-// Config contains configuration information for the plugin.
-type Config struct {
-	SomeString        string `codec:"some_optional_string_with_default"`
-	SomeBool          bool   `codec:"some_required_boolean"`
-	SomeIntArray      []int  `codec:"some_optional_list"`
-	FingerprintPeriod string `codec:"fingerprint_period"`
-}
+type Config struct { }
 
 // SkeletonDevicePlugin contains a skeleton for most of the implementation of a
 // device plugin.
 type SkeletonDevicePlugin struct {
 	logger log.Logger
 
-	// these are local copies of the config values that we need for operation
-	someString   string
-	someBool     bool
-	someIntArray []int
-
-	// fingerprintPeriod the period for the fingerprinting loop
-	// most plugins that fingerprint in a polling loop will have this
-	fingerprintPeriod time.Duration
-
-	// devices is a list of fingerprinted devices
-	// most plugins will maintain, at least, a list of the devices that were
-	// discovered during fingerprinting.
-	// we'll save the "device name"/"model"
 	devices    map[string]string
 	deviceLock sync.RWMutex
 }
@@ -123,33 +73,6 @@ func (d *SkeletonDevicePlugin) ConfigSchema() (*hclspec.Spec, error) {
 
 // SetConfig is called by the client to pass the configuration for the plugin.
 func (d *SkeletonDevicePlugin) SetConfig(c *base.Config) error {
-
-	// decode the plugin config
-	var config Config
-	if err := base.MsgPackDecode(c.PluginConfig, &config); err != nil {
-		return err
-	}
-
-	// save the configuration to the plugin
-	// typically, we'll perform any additional validation or conversion
-	// from MsgPack base types
-	if config.SomeString == "" {
-		return fmt.Errorf("some_optional_string_with_default was not acceptible, cannot be empty",
-			"value", config.SomeString)
-	}
-	d.someString = config.SomeString
-	d.someBool = config.SomeBool
-	d.someIntArray = config.SomeIntArray
-
-	// for example, convert the poll period from an HCL string into a time.Duration
-	period, err := time.ParseDuration(config.FingerprintPeriod)
-	if err != nil {
-		return fmt.Errorf("failed to parse doFingerprint period %q: %v", config.FingerprintPeriod, err)
-	}
-	d.fingerprintPeriod = period
-
-	d.logger.Debug("test debug")
-	d.logger.Info("config set", "config", log.Fmt("% #v", pretty.Formatter(config)))
 	return nil
 }
 
@@ -167,11 +90,7 @@ func (d *SkeletonDevicePlugin) Fingerprint(ctx context.Context) (<-chan *device.
 // Stats streams statistics for the detected devices.
 // Messages should be emitted to the returned channel on the specified interval.
 func (d *SkeletonDevicePlugin) Stats(ctx context.Context, interval time.Duration) (<-chan *device.StatsResponse, error) {
-	// Similar to Fingerprint, Stats returns a channel. The recommended way of
-	// organizing a plugin is to pass that into a long-running goroutine and
-	// return the channel immediately.
 	outCh := make(chan *device.StatsResponse)
-	go d.doStats(ctx, outCh, interval)
 	return outCh, nil
 }
 
